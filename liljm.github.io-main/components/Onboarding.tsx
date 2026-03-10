@@ -1,0 +1,94 @@
+import React, { useState } from 'react';
+import { UserProfile } from '../types';
+import Card from './ui/Card';
+import { ChartIcon } from './icons/ChartIcon';
+
+interface OnboardingProps {
+  profile: UserProfile;
+  onSave: (profile: UserProfile) => void;
+}
+
+const Onboarding: React.FC<OnboardingProps> = ({ profile, onSave }) => {
+  const [formData, setFormData] = useState<UserProfile>(profile);
+  const [error, setError] = useState<string>('');
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: name === 'age' || name === 'weight' || name === 'height' ? (value === '' ? 0 : Number(value)) : value
+    }));
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.age || formData.age <= 0 || !formData.weight || formData.weight <= 0 || !formData.height || formData.height <= 0) {
+      setError('Por favor, preencha sua idade, peso e altura com valores válidos para continuar.');
+      return;
+    }
+    setError('');
+    onSave(formData);
+  };
+
+  return (
+    <div className="bg-background dark:bg-gray-900 min-h-screen flex items-center justify-center p-4">
+        <div className="w-full max-w-2xl">
+            <div className="flex items-center justify-center mb-6">
+                <ChartIcon className="h-8 w-8 text-primary" />
+                <h1 className="text-3xl font-bold ml-3 text-text dark:text-gray-50">Bem-vindo(a) ao NutriAI!</h1>
+            </div>
+            <p className="text-center text-text-light dark:text-gray-400 mb-6">
+                Para personalizar sua experiência, precisamos de mais algumas informações.
+            </p>
+            <Card>
+                <form onSubmit={handleSubmit} className="space-y-6">
+                <h2 className="text-xl font-bold text-text dark:text-gray-50 mb-4">Complete seu Perfil</h2>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div>
+                    <label htmlFor="age" className="block text-sm font-medium text-text-light dark:text-gray-400">Idade</label>
+                    <input type="number" name="age" id="age" value={formData.age || ''} onChange={handleChange} className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:border-gray-600 dark:text-gray-50 dark:placeholder-gray-400" placeholder="Sua idade" required />
+                    </div>
+                    <div>
+                    <label htmlFor="weight" className="block text-sm font-medium text-text-light dark:text-gray-400">Peso (kg)</label>
+                    <input type="number" name="weight" id="weight" value={formData.weight || ''} onChange={handleChange} className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:border-gray-600 dark:text-gray-50 dark:placeholder-gray-400" placeholder="Seu peso" required/>
+                    </div>
+                    <div>
+                    <label htmlFor="height" className="block text-sm font-medium text-text-light dark:text-gray-400">Altura (cm)</label>
+                    <input type="number" name="height" id="height" value={formData.height || ''} onChange={handleChange} className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:border-gray-600 dark:text-gray-50 dark:placeholder-gray-400" placeholder="Sua altura" required/>
+                    </div>
+                </div>
+                
+                <div>
+                    <label htmlFor="goal" className="block text-sm font-medium text-text-light dark:text-gray-400">Objetivo Principal</label>
+                    <select name="goal" id="goal" value={formData.goal} onChange={handleChange} className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:border-gray-600 dark:text-gray-50">
+                    <option value="lose_weight">Perder Peso</option>
+                    <option value="maintain_weight">Manter Peso</option>
+                    <option value="gain_muscle">Ganhar Massa Muscular</option>
+                    </select>
+                </div>
+                
+                <div>
+                    <label htmlFor="allergies" className="block text-sm font-medium text-text-light dark:text-gray-400">Alergias (opcional)</label>
+                    <textarea name="allergies" id="allergies" value={formData.allergies || ''} onChange={handleChange} rows={2} className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:border-gray-600 dark:text-gray-50 dark:placeholder-gray-400" placeholder="ex: amendoim, glúten"></textarea>
+                </div>
+                
+                <div>
+                    <label htmlFor="restrictions" className="block text-sm font-medium text-text-light dark:text-gray-400">Restrições Alimentares (opcional)</label>
+                    <textarea name="restrictions" id="restrictions" value={formData.restrictions || ''} onChange={handleChange} rows={2} className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:border-gray-600 dark:text-gray-50 dark:placeholder-gray-400" placeholder="ex: vegetariano"></textarea>
+                </div>
+                
+                {error && <p className="text-red-500 text-sm text-center">{error}</p>}
+
+                <div className="flex justify-end">
+                    <button type="submit" className="w-full md:w-auto px-8 py-3 bg-primary text-black font-bold rounded-lg shadow-md hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
+                    Salvar e Começar
+                    </button>
+                </div>
+                </form>
+            </Card>
+        </div>
+    </div>
+  );
+};
+
+export default Onboarding;
