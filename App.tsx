@@ -2,9 +2,10 @@ import React, { useEffect } from 'react';
 import Auth from './components/Auth';
 import MainApp from './MainApp';
 import Onboarding from './components/Onboarding';
-import { useLocalStorage } from './hooks/useLocalStorage';
+import { useAuth } from './hooks/useAuth';
+import { useFirestore } from './hooks/useFirestore';
 import { useTheme } from './hooks/useTheme';
-import { User, UserProfile } from './types';
+import { UserProfile } from './types';
 
 const isProfileComplete = (profile: UserProfile | undefined): boolean => {
   if (!profile) return false;
@@ -13,18 +14,21 @@ const isProfileComplete = (profile: UserProfile | undefined): boolean => {
 
 const App: React.FC = () => {
   useTheme(); // Initialize theme hook at the top level
-  const [users, setUsers] = useLocalStorage<User[]>('nutriai_users', []);
-  const [currentUser, setCurrentUser] = useLocalStorage<User | null>('nutriai_currentUser', null);
+  const { currentUser, loading: authLoading, logout } = useAuth();
   
-  const userKeySuffix = currentUser ? `_${currentUser.id}` : '';
-  const [profile, setProfile] = useLocalStorage<UserProfile | undefined>(`userProfile${userKeySuffix}`, undefined);
+  const [profile, setProfile, loadingProfile] = useFirestore<UserProfile | undefined>(
+    currentUser?.id || '', 
+    'userProfile', 
+    undefined
+  );
 
   // This effect ensures that when the user logs out, the profile state is also cleared.
   // It also initializes a default profile for a newly logged-in user if one doesn't exist.
   useEffect(() => {
     if (!currentUser) {
       setProfile(undefined);
-    } else if (profile === undefined) { // Specifically check for undefined to initialize
+    } else if (profile === undefined && !loadingProfile) {
+      // Initialize default profile for new users
       setProfile({
         name: currentUser.name,
         age: 0,
@@ -35,48 +39,26 @@ const App: React.FC = () => {
         restrictions: '',
       });
     }
-  }, [currentUser, profile, setProfile]);
+  }, [currentUser, profile, setProfile, loadingProfile]);
 
-
-  const handleRegister = (name: string, email: string, password: string): boolean => {
-    if (users.some(user => user.email.toLowerCase() === email.toLowerCase())) {
-      alert('Este e-mail já está em uso. Por favor, tente outro.');
-      return false;
-    }
-    const newUser: User = {
-      id: new Date().toISOString(),
-      name,
-      email,
-      password, // Plain text password, not for production!
-    };
-    setUsers([...users, newUser]);
-    // Set current user first, which changes userKeySuffix for useLocalStorage
-    setCurrentUser(newUser);
-    // Then explicitly set profile to undefined to trigger the initialization effect
-    setProfile(undefined);
-    return true;
-  };
-
-  const handleLogin = (email: string, password: string): boolean => {
-    const user = users.find(u => u.email.toLowerCase() === email.toLowerCase());
-    if (user && user.password === password) {
-      setCurrentUser(user);
-      return true;
-    }
-    alert('E-mail ou senha inválidos.');
-    return false;
-  };
-
-  const handleLogout = () => {
-    setCurrentUser(null);
-  };
-
-  const handleSaveProfile = (updatedProfile: UserProfile) => {
+  const handleSaveProfile = async (updatedProfile: UserProfile) => {
     setProfile(updatedProfile);
   };
 
+  // Show loading screen while authenticating
+  if (authLoading || (currentUser && loadingProfile)) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-background dark:bg-gray-900">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-gray-600 dark:text-gray-400">Carregando...</p>
+        </div>
+      </div>
+    );
+  }
+
   if (!currentUser) {
-    return <Auth onLogin={handleLogin} onRegister={handleRegister} />;
+    return <Auth />;
   }
   
   // While profile is being loaded/initialized, render nothing to prevent passing `undefined`
@@ -88,7 +70,15 @@ const App: React.FC = () => {
     return <Onboarding profile={profile} onSave={handleSaveProfile} />;
   }
 
-  return <MainApp user={currentUser} onLogout={handleLogout} profile={profile} onSaveProfile={handleSaveProfile} />;
+  // Converter para o formato User esperado pelo MainApp
+  const user = {
+    id: currentUser.id,
+    email: currentUser.email,
+    name: currentUser.name,
+    password: '' // Não é mais necessário
+  };
+
+  return <MainApp user={user} onLogout={logout} profile={profile} onSaveProfile={handleSaveProfile} />;
 };
 
 export default App;

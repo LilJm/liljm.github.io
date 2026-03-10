@@ -7,7 +7,7 @@ import SavedPlans from './components/SavedPlans';
 import SavedRecipes from './components/SavedRecipes';
 import WaterTracker from './components/WaterTracker';
 import Home from './components/Home'; // Import the new Home component
-import { useLocalStorage } from './hooks/useLocalStorage';
+import { useFirestore } from './hooks/useFirestore';
 import { UserProfile, MealPlan, Recipe, User } from './types';
 import Chatbot from './components/Chatbot';
 import { ChatBubbleIcon } from './components/icons/ChatBubbleIcon';
@@ -22,10 +22,9 @@ interface MainAppProps {
 const MainApp: React.FC<MainAppProps> = ({ user, onLogout, profile, onSaveProfile }) => {
   const [activeView, setActiveView] = useState('home'); // Set 'home' as the default view
   const [isChatbotOpen, setIsChatbotOpen] = useState(false);
-  const userKeySuffix = `_${user.id}`;
   
-  const [savedPlans, setSavedPlans] = useLocalStorage<MealPlan[]>(`savedPlans${userKeySuffix}`, []);
-  const [savedRecipes, setSavedRecipes] = useLocalStorage<Recipe[]>(`savedRecipes${userKeySuffix}`, []);
+  const [savedPlans, setSavedPlans, loadingPlans] = useFirestore<MealPlan[]>(user.id, 'savedPlans', []);
+  const [savedRecipes, setSavedRecipes, loadingRecipes] = useFirestore<Recipe[]>(user.id, 'savedRecipes', []);
 
   const handleSavePlan = (plan: MealPlan) => {
     if (!savedPlans.some(p => p.id === plan.id)) {
@@ -83,6 +82,18 @@ const MainApp: React.FC<MainAppProps> = ({ user, onLogout, profile, onSaveProfil
         return <Home profile={profile} savedPlans={savedPlans} userId={user.id} onNavigate={setActiveView} />;
     }
   };
+
+  // Show loading spinner while data is being fetched from Firestore
+  if (loadingPlans || loadingRecipes) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-background dark:bg-gray-900">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-gray-600 dark:text-gray-400">Carregando dados...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex bg-background dark:bg-gray-900 min-h-screen font-sans">

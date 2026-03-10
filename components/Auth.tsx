@@ -4,25 +4,23 @@ import { ChartIcon } from './icons/ChartIcon';
 import { useTheme } from '../hooks/useTheme';
 import { SunIcon } from './icons/SunIcon';
 import { MoonIcon } from './icons/MoonIcon';
+import { useAuth } from '../hooks/useAuth';
 
-interface AuthProps {
-  onLogin: (email: string, password: string) => boolean;
-  onRegister: (name: string, email: string, password: string) => boolean;
-}
-
-const Auth: React.FC<AuthProps> = ({ onLogin, onRegister }) => {
+const Auth: React.FC = () => {
   const [isLoginMode, setIsLoginMode] = useState(true);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const [theme, setTheme] = useTheme();
+  const { register, login } = useAuth();
 
   const toggleTheme = () => {
     setTheme(theme === 'light' ? 'dark' : 'light');
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
@@ -31,17 +29,23 @@ const Auth: React.FC<AuthProps> = ({ onLogin, onRegister }) => {
       return;
     }
 
-    let success = false;
-    if (isLoginMode) {
-      success = onLogin(email, password);
-    } else {
-      success = onRegister(name, email, password);
-    }
+    setLoading(true);
 
-    if (!success && isLoginMode) {
-        setError('E-mail ou senha inválidos.');
-    } else if (!success && !isLoginMode) {
-        setError('Este e-mail já está em uso.');
+    try {
+      let result;
+      if (isLoginMode) {
+        result = await login(email, password);
+      } else {
+        result = await register(name, email, password);
+      }
+
+      if (!result.success && result.message) {
+        setError(result.message);
+      }
+    } catch (error) {
+      setError('Ocorreu um erro. Tente novamente.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -111,8 +115,12 @@ const Auth: React.FC<AuthProps> = ({ onLogin, onRegister }) => {
             </div>
             {error && <p className="text-red-500 text-sm text-center">{error}</p>}
             <div>
-              <button type="submit" className="w-full px-6 py-3 bg-primary text-black font-bold rounded-lg shadow-md hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
-                {isLoginMode ? 'Entrar' : 'Cadastrar'}
+              <button 
+                type="submit" 
+                disabled={loading}
+                className="w-full px-6 py-3 bg-primary text-black font-bold rounded-lg shadow-md hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {loading ? 'Processando...' : (isLoginMode ? 'Entrar' : 'Cadastrar')}
               </button>
             </div>
           </form>
