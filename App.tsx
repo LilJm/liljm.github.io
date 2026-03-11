@@ -1,84 +1,99 @@
-import React, { useEffect } from 'react';
-import Auth from './components/Auth';
-import MainApp from './MainApp';
-import Onboarding from './components/Onboarding';
+import React, { Suspense, lazy, useMemo } from 'react';
 import { useAuth } from './hooks/useAuth';
-import { useFirestore } from './hooks/useFirestore';
+import { FirestoreStateError, useFirestore } from './hooks/useFirestore';
 import { useTheme } from './hooks/useTheme';
 import { UserProfile } from './types';
+import ErrorBoundary from './components/ErrorBoundary';
+import LoadingScreen from './components/ui/LoadingScreen';
+
+const Auth = lazy(() => import('./components/Auth'));
+const MainApp = lazy(() => import('./MainApp'));
+const Onboarding = lazy(() => import('./components/Onboarding'));
 
 const isProfileComplete = (profile: UserProfile | undefined): boolean => {
   if (!profile) return false;
   return profile.age > 0 && profile.weight > 0 && profile.height > 0;
 };
 
+const createDefaultProfile = (name: string): UserProfile => ({
+  name,
+  age: 0,
+  weight: 0,
+  height: 0,
+  goal: 'maintain_weight',
+  allergies: '',
+  restrictions: '',
+});
+
+const isPermissionDenied = (error: FirestoreStateError | null): boolean => error?.code === 'permission-denied';
+
 const App: React.FC = () => {
   useTheme(); // Initialize theme hook at the top level
   const { currentUser, loading: authLoading, logout } = useAuth();
   
-  const [profile, setProfile, loadingProfile] = useFirestore<UserProfile | undefined>(
+  const [profile, setProfile, loadingProfile, profileError] = useFirestore<UserProfile | undefined>(
     currentUser?.id || '', 
     'userProfile', 
     undefined
   );
 
-  // This effect ensures that when the user logs out, the profile state is also cleared.
-  // It also initializes a default profile for a newly logged-in user if one doesn't exist.
-  useEffect(() => {
+  const resolvedProfile = useMemo(() => {
     if (!currentUser) {
-      setProfile(undefined);
-    } else if (profile === undefined && !loadingProfile) {
-      // Initialize default profile for new users
-      setProfile({
-        name: currentUser.name,
-        age: 0,
-        weight: 0,
-        height: 0,
-        goal: 'maintain_weight',
-        allergies: '',
-        restrictions: '',
-      });
+      return undefined;
     }
-  }, [currentUser, profile, setProfile, loadingProfile]);
 
-  const handleSaveProfile = async (updatedProfile: UserProfile) => {
-    setProfile(updatedProfile);
+    return profile ?? createDefaultProfile(currentUser.name);
+  }, [currentUser, profile]);
+
+  const handleSaveProfile = async (updatedProfile: UserProfile): Promise<boolean> => {
+    return setProfile(updatedProfile);
   };
 
-  // Show loading screen while authenticating
   if (authLoading || (currentUser && loadingProfile)) {
+    return <LoadingScreen label="Carregando..." />;
+  }
+
+  if (!currentUser) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-background dark:bg-gray-900">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-gray-600 dark:text-gray-400">Carregando...</p>
+      <Suspense fallback={<LoadingScreen label="Carregando..." />}>
+        <Auth />
+      </Suspense>
+    );
+  }
+
+  if (isPermissionDenied(profileError)) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background p-4 dark:bg-gray-900">
+        <div className="max-w-md rounded-xl bg-surface p-8 shadow-md dark:bg-gray-800">
+          <h1 className="mb-3 text-2xl font-bold text-text dark:text-gray-50">Sessão sem permissão</h1>
+          <p className="mb-6 text-text-light dark:text-gray-400">{profileError?.message}</p>
+          <button onClick={logout} className="rounded-lg bg-primary px-6 py-3 font-bold text-black shadow-md hover:bg-primary-dark">
+            Voltar para o login
+          </button>
         </div>
       </div>
     );
   }
 
-  if (!currentUser) {
-    return <Auth />;
-  }
-  
-  // While profile is being loaded/initialized, render nothing to prevent passing `undefined`
-  if (profile === undefined) {
-    return null;
+  if (!resolvedProfile) {
+    return <LoadingScreen label="Preparando seu perfil..." />;
   }
 
   if (!isProfileComplete(profile)) {
-    return <Onboarding profile={profile} onSave={handleSaveProfile} />;
+    return (
+      <Suspense fallback={<LoadingScreen label="Preparando seu perfil..." />}>
+        <Onboarding profile={resolvedProfile} onSave={handleSaveProfile} saveError={profileError?.message ?? null} />
+      </Suspense>
+    );
   }
 
-  // Converter para o formato User esperado pelo MainApp
-  const user = {
-    id: currentUser.id,
-    email: currentUser.email,
-    name: currentUser.name,
-    password: '' // Não é mais necessário
-  };
-
-  return <MainApp user={user} onLogout={logout} profile={profile} onSaveProfile={handleSaveProfile} />;
+  return (
+    <ErrorBoundary>
+      <Suspense fallback={<LoadingScreen label="Carregando aplicativo..." />}>
+        <MainApp user={currentUser} onLogout={logout} profile={resolvedProfile} onSaveProfile={handleSaveProfile} />
+      </Suspense>
+    </ErrorBoundary>
+  );
 };
 
 export default App;

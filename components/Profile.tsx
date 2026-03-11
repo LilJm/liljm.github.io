@@ -4,12 +4,14 @@ import Card from './ui/Card';
 
 interface ProfileProps {
   profile: UserProfile;
-  onSave: (profile: UserProfile) => void;
+  onSave: (profile: UserProfile) => Promise<boolean>;
 }
 
 const Profile: React.FC<ProfileProps> = ({ profile, onSave }) => {
   const [formData, setFormData] = useState<UserProfile>(profile);
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     setFormData(profile);
@@ -23,9 +25,19 @@ const Profile: React.FC<ProfileProps> = ({ profile, onSave }) => {
     }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onSave(formData);
+    setError(null);
+    setIsSaving(true);
+    const success = await onSave(formData);
+    setIsSaving(false);
+
+    if (!success) {
+      setSaved(false);
+      setError('Não foi possível salvar seu perfil agora. Tente novamente.');
+      return;
+    }
+
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   };
@@ -75,9 +87,10 @@ const Profile: React.FC<ProfileProps> = ({ profile, onSave }) => {
           </div>
 
           <div className="flex justify-end items-center">
+            {error && <span className="text-red-500 mr-4 transition-opacity duration-300">{error}</span>}
             {saved && <span className="text-green-600 mr-4 transition-opacity duration-300">Perfil salvo com sucesso!</span>}
-            <button type="submit" className="px-6 py-2 bg-primary text-black font-bold rounded-lg shadow-md hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
-              Salvar Alterações
+            <button type="submit" disabled={isSaving} className="px-6 py-2 bg-primary text-black font-bold rounded-lg shadow-md hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:cursor-not-allowed disabled:opacity-60">
+              {isSaving ? 'Salvando...' : 'Salvar Alterações'}
             </button>
           </div>
         </form>

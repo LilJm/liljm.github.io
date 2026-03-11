@@ -6,24 +6,30 @@ import jsPDF from 'jspdf';
 
 interface SavedPlansProps {
   savedPlans: MealPlan[];
-  onDeletePlan: (planId: string) => void;
-  onUpdatePlan: (planId: string, newName: string) => void;
+  onDeletePlan: (planId: string) => Promise<boolean>;
+  onUpdatePlan: (planId: string, newName: string) => Promise<boolean>;
 }
 
 const SavedPlans: React.FC<SavedPlansProps> = ({ savedPlans, onDeletePlan, onUpdatePlan }) => {
   const [expandedPlanId, setExpandedPlanId] = useState<string | null>(null);
   const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState<string>('');
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const togglePlan = (planId: string) => {
     if (editingPlanId === planId) return; // Don't collapse while editing
     setExpandedPlanId(expandedPlanId === planId ? null : planId);
   };
   
-  const handleSaveName = (planId: string) => {
+  const handleSaveName = async (planId: string) => {
     if (editingName.trim()) {
-      onUpdatePlan(planId, editingName.trim());
-      setEditingPlanId(null);
+      const success = await onUpdatePlan(planId, editingName.trim());
+      if (success) {
+        setActionError(null);
+        setEditingPlanId(null);
+      } else {
+        setActionError('Não foi possível renomear o plano agora.');
+      }
     }
   };
 
@@ -145,6 +151,7 @@ const SavedPlans: React.FC<SavedPlansProps> = ({ savedPlans, onDeletePlan, onUpd
   return (
     <div className="p-4 md:p-8">
       <h1 className="text-3xl font-bold text-text dark:text-gray-50 mb-8">Seus Planos Salvos</h1>
+      {actionError && <p className="mb-4 text-red-500">{actionError}</p>}
       <div className="space-y-4">
         {savedPlans.map((plan) => (
           <Card key={plan.id}>
@@ -165,7 +172,7 @@ const SavedPlans: React.FC<SavedPlansProps> = ({ savedPlans, onDeletePlan, onUpd
                 <div className="flex items-center space-x-4 ml-4">
                   {editingPlanId === plan.id ? (
                     <>
-                      <button onClick={(e) => { e.stopPropagation(); handleSaveName(plan.id); }} className="text-sm text-green-600 hover:text-green-800 font-semibold">Salvar</button>
+                      <button onClick={(e) => { e.stopPropagation(); void handleSaveName(plan.id); }} className="text-sm text-green-600 hover:text-green-800 font-semibold">Salvar</button>
                       <button onClick={(e) => { e.stopPropagation(); setEditingPlanId(null); }} className="text-sm text-gray-600 hover:text-gray-800 font-semibold">Cancelar</button>
                     </>
                   ) : (
@@ -176,10 +183,13 @@ const SavedPlans: React.FC<SavedPlansProps> = ({ savedPlans, onDeletePlan, onUpd
                       <button title="Baixar PDF" onClick={(e) => { e.stopPropagation(); handleDownloadPlanPDF(plan); }} className="text-gray-500 hover:text-primary"><DownloadIcon className="w-5 h-5" /></button>
                       <button onClick={(e) => { e.stopPropagation(); setEditingPlanId(plan.id); setEditingName(plan.name); setExpandedPlanId(plan.id); }} className="text-blue-500 hover:text-blue-700 font-semibold text-sm">Renomear</button>
                       <button
-                            onClick={(e) => {
+                            onClick={async (e) => {
                                 e.stopPropagation();
                                 if (window.confirm(`Tem certeza que deseja excluir o plano "${plan.name}"?`)) {
-                                    onDeletePlan(plan.id);
+                                  const success = await onDeletePlan(plan.id);
+                                  if (!success) {
+                                    setActionError('Não foi possível excluir o plano agora.');
+                                  }
                                 }
                             }}
                             className="text-red-500 hover:text-red-700 font-semibold text-sm"

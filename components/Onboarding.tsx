@@ -5,12 +5,14 @@ import { ChartIcon } from './icons/ChartIcon';
 
 interface OnboardingProps {
   profile: UserProfile;
-  onSave: (profile: UserProfile) => void;
+  onSave: (profile: UserProfile) => Promise<boolean>;
+  saveError?: string | null;
 }
 
-const Onboarding: React.FC<OnboardingProps> = ({ profile, onSave }) => {
+const Onboarding: React.FC<OnboardingProps> = ({ profile, onSave, saveError }) => {
   const [formData, setFormData] = useState<UserProfile>(profile);
   const [error, setError] = useState<string>('');
+  const [isSaving, setIsSaving] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -20,14 +22,16 @@ const Onboarding: React.FC<OnboardingProps> = ({ profile, onSave }) => {
     }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.age || formData.age <= 0 || !formData.weight || formData.weight <= 0 || !formData.height || formData.height <= 0) {
       setError('Por favor, preencha sua idade, peso e altura com valores válidos para continuar.');
       return;
     }
     setError('');
-    onSave(formData);
+    setIsSaving(true);
+    await onSave(formData);
+    setIsSaving(false);
   };
 
   return (
@@ -77,11 +81,11 @@ const Onboarding: React.FC<OnboardingProps> = ({ profile, onSave }) => {
                     <textarea name="restrictions" id="restrictions" value={formData.restrictions || ''} onChange={handleChange} rows={2} className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:border-gray-600 dark:text-gray-50 dark:placeholder-gray-400" placeholder="ex: vegetariano"></textarea>
                 </div>
                 
-                {error && <p className="text-red-500 text-sm text-center">{error}</p>}
+                {(error || saveError) && <p className="text-red-500 text-sm text-center">{error || saveError}</p>}
 
                 <div className="flex justify-end">
-                    <button type="submit" className="w-full md:w-auto px-8 py-3 bg-primary text-black font-bold rounded-lg shadow-md hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
-                    Salvar e Começar
+                  <button type="submit" disabled={isSaving} className="w-full md:w-auto px-8 py-3 bg-primary text-black font-bold rounded-lg shadow-md hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:cursor-not-allowed disabled:opacity-60">
+                  {isSaving ? 'Salvando...' : 'Salvar e Começar'}
                     </button>
                 </div>
                 </form>

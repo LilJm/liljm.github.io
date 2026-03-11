@@ -41,8 +41,12 @@ const Auth: React.FC = () => {
 
       if (!result.success && result.message) {
         setError(result.message);
+      } else {
+        setName('');
+        setEmail('');
+        setPassword('');
       }
-    } catch (error) {
+    } catch {
       setError('Ocorreu um erro. Tente novamente.');
     } finally {
       setLoading(false);
