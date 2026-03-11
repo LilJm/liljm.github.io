@@ -1,81 +1,71 @@
-import React, { Suspense, lazy, startTransition, useState } from 'react';
+import React, { useState } from 'react';
 import Sidebar from './components/Sidebar';
+import Profile from './components/Profile';
+import Planner from './components/Planner';
+import Recipes from './components/Recipes';
+import SavedPlans from './components/SavedPlans';
+import SavedRecipes from './components/SavedRecipes';
+import WaterTracker from './components/WaterTracker';
+import Home from './components/Home'; // Import the new Home component
 import { useFirestore } from './hooks/useFirestore';
-import LoadingScreen from './components/ui/LoadingScreen';
-import { UserProfile, MealPlan, Recipe, SessionUser } from './types';
+import { UserProfile, MealPlan, Recipe, User } from './types';
+import Chatbot from './components/Chatbot';
 import { ChatBubbleIcon } from './components/icons/ChatBubbleIcon';
 
-const Profile = lazy(() => import('./components/Profile'));
-const Planner = lazy(() => import('./components/Planner'));
-const Recipes = lazy(() => import('./components/Recipes'));
-const SavedPlans = lazy(() => import('./components/SavedPlans'));
-const SavedRecipes = lazy(() => import('./components/SavedRecipes'));
-const WaterTracker = lazy(() => import('./components/WaterTracker'));
-const Home = lazy(() => import('./components/Home'));
-const Chatbot = lazy(() => import('./components/Chatbot'));
-
 interface MainAppProps {
-    user: SessionUser;
+    user: User;
     onLogout: () => void;
     profile: UserProfile;
-    onSaveProfile: (profile: UserProfile) => Promise<boolean>;
+    onSaveProfile: (profile: UserProfile) => void;
 }
 
 const MainApp: React.FC<MainAppProps> = ({ user, onLogout, profile, onSaveProfile }) => {
   const [activeView, setActiveView] = useState('home'); // Set 'home' as the default view
   const [isChatbotOpen, setIsChatbotOpen] = useState(false);
   
-  const [savedPlans, setSavedPlans, loadingPlans, savedPlansError] = useFirestore<MealPlan[]>(user.id, 'savedPlans', []);
-  const [savedRecipes, setSavedRecipes, loadingRecipes, savedRecipesError] = useFirestore<Recipe[]>(user.id, 'savedRecipes', []);
+  const [savedPlans, setSavedPlans, loadingPlans] = useFirestore<MealPlan[]>(user.id, 'savedPlans', []);
+  const [savedRecipes, setSavedRecipes, loadingRecipes] = useFirestore<Recipe[]>(user.id, 'savedRecipes', []);
 
-  const handleSavePlan = async (plan: MealPlan): Promise<boolean> => {
+  const handleSavePlan = (plan: MealPlan) => {
     if (!savedPlans.some(p => p.id === plan.id)) {
-        return setSavedPlans([...savedPlans, plan]);
+        const newPlans = [...savedPlans, plan];
+        setSavedPlans(newPlans);
     }
-
-    return true;
   };
 
-  const handleDeletePlan = async (planId: string): Promise<boolean> => {
-    return setSavedPlans(savedPlans.filter(p => p.id !== planId));
+  const handleDeletePlan = (planId: string) => {
+    setSavedPlans(savedPlans.filter(p => p.id !== planId));
   };
 
-  const handleUpdatePlan = async (planId: string, newName: string): Promise<boolean> => {
+  const handleUpdatePlan = (planId: string, newName: string) => {
     const updatedPlans = savedPlans.map(p => 
       p.id === planId ? { ...p, name: newName } : p
     );
-    return setSavedPlans(updatedPlans);
+    setSavedPlans(updatedPlans);
   };
 
-  const handleSaveRecipe = async (recipe: Recipe): Promise<boolean> => {
+  const handleSaveRecipe = (recipe: Recipe) => {
     if (!savedRecipes.some(r => r.id === recipe.id)) {
-        return setSavedRecipes([...savedRecipes, recipe]);
+        const newRecipes = [...savedRecipes, recipe];
+        setSavedRecipes(newRecipes);
     }
-
-    return true;
   };
 
-  const handleDeleteRecipe = async (recipeId: string): Promise<boolean> => {
-    return setSavedRecipes(savedRecipes.filter(r => r.id !== recipeId));
+  const handleDeleteRecipe = (recipeId: string) => {
+    setSavedRecipes(savedRecipes.filter(r => r.id !== recipeId));
   };
 
-  const handleUpdateRecipe = async (recipeId: string, newName: string): Promise<boolean> => {
+  const handleUpdateRecipe = (recipeId: string, newName: string) => {
     const updatedRecipes = savedRecipes.map(r => 
       r.id === recipeId ? { ...r, name: newName } : r
     );
-    return setSavedRecipes(updatedRecipes);
-  };
-
-  const handleNavigate = (view: string) => {
-    startTransition(() => {
-      setActiveView(view);
-    });
+    setSavedRecipes(updatedRecipes);
   };
 
   const renderContent = () => {
     switch (activeView) {
       case 'home':
-        return <Home profile={profile} savedPlans={savedPlans} userId={user.id} onNavigate={handleNavigate} />;
+        return <Home profile={profile} savedPlans={savedPlans} userId={user.id} onNavigate={setActiveView} />;
       case 'planner':
         return <Planner profile={profile} onSavePlan={handleSavePlan} />;
       case 'recipes':
@@ -89,32 +79,30 @@ const MainApp: React.FC<MainAppProps> = ({ user, onLogout, profile, onSaveProfil
       case 'profile':
         return <Profile profile={profile} onSave={onSaveProfile} />;
       default:
-        return <Home profile={profile} savedPlans={savedPlans} userId={user.id} onNavigate={handleNavigate} />;
+        return <Home profile={profile} savedPlans={savedPlans} userId={user.id} onNavigate={setActiveView} />;
     }
   };
 
-  const isDataLoading = loadingPlans || loadingRecipes;
-  const dataError = savedPlansError ?? savedRecipesError;
+  // Show loading spinner while data is being fetched from Firestore
+  if (loadingPlans || loadingRecipes) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-background dark:bg-gray-900">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-gray-600 dark:text-gray-400">Carregando dados...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex bg-background dark:bg-gray-900 min-h-screen font-sans">
-      <Sidebar user={user} activeView={activeView} onNavigate={handleNavigate} onLogout={onLogout} />
+      <Sidebar user={user} activeView={activeView} onNavigate={setActiveView} onLogout={onLogout} />
       <main className="flex-1 ml-64">
-        {isDataLoading && (
-          <div className="mx-4 mt-4 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-300 md:mx-8">
-            Carregando seus dados salvos em segundo plano...
-          </div>
-        )}
-        {dataError && (
-          <div className="mx-4 mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300 md:mx-8">
-            {dataError.message}
-          </div>
-        )}
-        <Suspense fallback={<LoadingScreen label="Abrindo seção..." compact />}>
-          {renderContent()}
-        </Suspense>
+        {renderContent()}
       </main>
       
+      {/* Floating Action Button */}
       {!isChatbotOpen && (
         <button
           onClick={() => setIsChatbotOpen(true)}
@@ -125,13 +113,12 @@ const MainApp: React.FC<MainAppProps> = ({ user, onLogout, profile, onSaveProfil
         </button>
       )}
 
+      {/* Chatbot Window */}
       {isChatbotOpen && (
-        <Suspense fallback={<LoadingScreen label="Abrindo coach..." compact overlay />}>
-          <Chatbot
-            profile={profile}
-            onClose={() => setIsChatbotOpen(false)}
-          />
-        </Suspense>
+        <Chatbot
+          profile={profile}
+          onClose={() => setIsChatbotOpen(false)}
+        />
       )}
     </div>
   );

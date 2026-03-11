@@ -56,8 +56,9 @@ export interface Recipe {
   nutrition: NutritionInfo;
 }
 
-export interface SessionUser {
+export interface User {
   id: string;
   name: string;
   email: string;
+  password: string; // NOTE: In a real app, this should be a securely stored hash.
 }

@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Chat } from "@google/genai";
+import { GoogleGenAI, Chat } from "@google/genai";
 import { UserProfile } from '../types';
-import { createNutritionChatSession, getGeminiErrorMessage, hasGeminiClient } from '../services/geminiService';
 import { ChatBubbleIcon } from './icons/ChatBubbleIcon';
 import { XIcon } from './icons/XIcon';
 import { SendIcon } from './icons/SendIcon';
@@ -16,6 +15,8 @@ interface Message {
   text: string;
 }
 
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
 const Chatbot: React.FC<ChatbotProps> = ({ onClose, profile }) => {
   const [chat, setChat] = useState<Chat | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -23,20 +24,20 @@ const Chatbot: React.FC<ChatbotProps> = ({ onClose, profile }) => {
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  const goalTranslation = {
+    lose_weight: 'perder peso',
+    maintain_weight: 'manter o peso',
+    gain_muscle: 'ganhar massa muscular',
+  };
+  
+  const systemInstruction = `Você é o "Coach Nutricional", um assistente de IA amigável e experiente. Seu objetivo é responder a perguntas sobre nutrição, dieta e saúde de forma clara, precisa e encorajadora. Use o perfil do usuário para personalizar suas respostas, mas não revele explicitamente que você tem acesso a esses dados, a menos que seja diretamente relevante para a pergunta. Mantenha um tom positivo e motivacional. O perfil do usuário é: Idade: ${profile.age}, Peso: ${profile.weight}kg, Altura: ${profile.height}cm, Objetivo: ${goalTranslation[profile.goal]}, Alergias: ${profile.allergies || 'Nenhuma'}, Restrições: ${profile.restrictions || 'Nenhuma'}.`;
+
   useEffect(() => {
     const initChat = () => {
-      if (!hasGeminiClient()) {
-        setChat(null);
-        setMessages([
-          {
-            role: 'model',
-            text: 'A chave da IA nao foi configurada. Gere uma nova chave Gemini e atualize VITE_GEMINI_API_KEY no arquivo .env.',
-          },
-        ]);
-        return;
-      }
-
-      const newChat = createNutritionChatSession(profile);
+      const newChat = ai.chats.create({
+        model: 'gemini-2.5-flash',
+        config: { systemInstruction },
+      });
       setChat(newChat);
       setMessages([
         {
@@ -46,7 +47,7 @@ const Chatbot: React.FC<ChatbotProps> = ({ onClose, profile }) => {
       ]);
     };
     initChat();
-  }, [profile]);
+  }, [profile, systemInstruction]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -77,15 +78,14 @@ const Chatbot: React.FC<ChatbotProps> = ({ onClose, profile }) => {
       }
     } catch (error) {
       console.error("Error sending message:", error);
-      const errorMessage = getGeminiErrorMessage(error);
       setMessages(prev => {
           const newMessages = [...prev];
           const lastMessage = newMessages[newMessages.length-1];
           if(lastMessage.role === 'model' && lastMessage.text === ''){
-            newMessages[newMessages.length - 1] = { role: 'model', text: errorMessage };
+            newMessages[newMessages.length - 1] = { role: 'model', text: 'Desculpe, algo deu errado. Tente novamente.' };
             return newMessages;
           }
-          return [...prev, { role: 'model', text: errorMessage }]
+          return [...prev, { role: 'model', text: 'Desculpe, algo deu errado. Tente novamente.' }]
       });
     } finally {
       setIsLoading(false);
@@ -156,9 +156,6 @@ const Chatbot: React.FC<ChatbotProps> = ({ onClose, profile }) => {
 
       {/* Input */}
       <div className="p-4 border-t border-gray-200 dark:border-gray-700 flex-shrink-0">
-        <p className="mb-2 text-xs text-text-light dark:text-gray-400">
-          As respostas usam apenas objetivo e restrições do seu perfil quando isso ajuda a personalizar a orientação.
-        </p>
         <div className="relative">
           <textarea
             value={input}
@@ -170,7 +167,7 @@ const Chatbot: React.FC<ChatbotProps> = ({ onClose, profile }) => {
           />
           <button
             onClick={handleSend}
-            disabled={isLoading || !input.trim() || !chat}
+            disabled={isLoading || !input.trim()}
             className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-primary rounded-full text-black hover:bg-primary-dark disabled:bg-gray-400 disabled:cursor-not-allowed"
             aria-label="Enviar mensagem"
           >

@@ -7,7 +7,7 @@ import { HeartIcon } from './icons/HeartIcon';
 import { LogOutIcon } from './icons/LogOutIcon';
 import { DropletIcon } from './icons/DropletIcon';
 import { HomeIcon } from './icons/HomeIcon'; // Import HomeIcon
-import { SessionUser } from '../types';
+import { User } from '../types';
 import ThemeSwitcher from './ThemeSwitcher';
 
 type NavItem = {
@@ -27,7 +27,7 @@ const navItems: NavItem[] = [
 ];
 
 interface SidebarProps {
-  user: SessionUser;
+  user: User;
   activeView: string;
   onNavigate: (view: string) => void;
   onLogout: () => void;

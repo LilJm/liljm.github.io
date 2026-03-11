@@ -1,136 +1,8 @@
-import { Chat, GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI, Type } from "@google/genai";
 import { UserProfile, MealPlan, Recipe, Meal } from '../types';
 
-const geminiApiKey = import.meta.env.VITE_GEMINI_API_KEY?.trim();
-const ai = geminiApiKey ? new GoogleGenAI({ apiKey: geminiApiKey }) : null;
-
-const MISSING_API_KEY_MESSAGE = 'A chave da IA nao foi configurada. Gere uma nova chave Gemini e defina VITE_GEMINI_API_KEY no seu arquivo .env local.';
-const LEAKED_API_KEY_MESSAGE = 'A chave Gemini configurada foi bloqueada por vazamento. Gere outra chave no Google AI Studio e atualize VITE_GEMINI_API_KEY no arquivo .env.';
-const ACCESS_DENIED_MESSAGE = 'A IA recusou a solicitacao com a chave atual. Verifique se a nova chave Gemini esta ativa e com acesso habilitado.';
-const RATE_LIMIT_MESSAGE = 'A IA atingiu o limite temporário de uso. Aguarde alguns instantes antes de tentar novamente.';
-const GENERIC_API_ERROR_MESSAGE = 'Nao foi possivel concluir a solicitacao com a IA agora. Tente novamente em instantes.';
-const MAX_RATE_LIMIT_RETRIES = 2;
-const RETRY_BASE_DELAY_MS = 1200;
-
-const goalTranslation = {
-    lose_weight: 'perder peso',
-    maintain_weight: 'manter o peso',
-    gain_muscle: 'ganhar massa muscular',
-};
-
-export const hasGeminiClient = (): boolean => ai !== null;
-
-const getAiClient = () => {
-    if (!ai) {
-        throw new Error(MISSING_API_KEY_MESSAGE);
-    }
-
-    return ai;
-};
-
-const getErrorText = (error: unknown): string => {
-    if (error instanceof Error) {
-        return error.message;
-    }
-
-    if (typeof error === 'string') {
-        return error;
-    }
-
-    try {
-        return JSON.stringify(error);
-    } catch {
-        return '';
-    }
-};
-
-export const getGeminiErrorMessage = (error: unknown): string => {
-    const errorText = getErrorText(error).toLowerCase();
-
-    if (errorText.includes('reported as leaked') || errorText.includes('was reported as leaked')) {
-        return LEAKED_API_KEY_MESSAGE;
-    }
-
-    if (errorText.includes('permission_denied') || errorText.includes('status":403') || errorText.includes('code":403')) {
-        return ACCESS_DENIED_MESSAGE;
-    }
-
-    if (errorText.includes('resource_exhausted') || errorText.includes('status":429') || errorText.includes('code":429')) {
-        return RATE_LIMIT_MESSAGE;
-    }
-
-    if (errorText.includes('api key') && (errorText.includes('missing') || errorText.includes('not configured'))) {
-        return MISSING_API_KEY_MESSAGE;
-    }
-
-    if (error instanceof Error && error.message) {
-        return error.message;
-    }
-
-    return GENERIC_API_ERROR_MESSAGE;
-};
-
-const isRateLimitError = (error: unknown): boolean => {
-    const errorText = getErrorText(error).toLowerCase();
-    return (
-        errorText.includes('resource_exhausted') ||
-        errorText.includes('status":429') ||
-        errorText.includes('code":429') ||
-        errorText.includes('too many requests') ||
-        errorText.includes('quota')
-    );
-};
-
-const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
-
-const runGeminiRequest = async <T,>(operation: () => Promise<T>): Promise<T> => {
-    for (let attempt = 0; attempt <= MAX_RATE_LIMIT_RETRIES; attempt += 1) {
-        try {
-            return await operation();
-        } catch (error) {
-            const canRetry = isRateLimitError(error) && attempt < MAX_RATE_LIMIT_RETRIES;
-
-            if (canRetry) {
-                const jitter = Math.floor(Math.random() * 400);
-                const waitTime = RETRY_BASE_DELAY_MS * (2 ** attempt) + jitter;
-                await sleep(waitTime);
-                continue;
-            }
-
-            throw new Error(getGeminiErrorMessage(error));
-        }
-    }
-
-    throw new Error(RATE_LIMIT_MESSAGE);
-};
-
-export const buildChatProfileContext = (profile: UserProfile): string => {
-    const context = [
-        `Objetivo principal: ${goalTranslation[profile.goal]}`,
-        `Alergias: ${profile.allergies?.trim() || 'Nenhuma informada'}`,
-        `Restrições alimentares: ${profile.restrictions?.trim() || 'Nenhuma informada'}`,
-    ];
-
-    return context.join('; ');
-};
-
-const buildMealPlanProfileContext = (profile: UserProfile): string => `
-    - Idade: ${profile.age}
-    - Peso: ${profile.weight} kg
-    - Altura: ${profile.height} cm
-    - Objetivo: ${goalTranslation[profile.goal]}
-    - Alergias: ${profile.allergies || 'Nenhuma'}
-    - Restrições alimentares: ${profile.restrictions || 'Nenhuma'}
-`;
-
-export const createNutritionChatSession = (profile: UserProfile): Chat => {
-    const systemInstruction = `Você é o "Coach Nutricional", um assistente de IA amigável e experiente. Responda dúvidas sobre nutrição, dieta e hábitos saudáveis com clareza, sem fazer diagnóstico médico. Personalize a resposta usando apenas o contexto mínimo do perfil quando isso realmente ajudar. Contexto permitido do usuário: ${buildChatProfileContext(profile)}.`;
-
-    return getAiClient().chats.create({
-        model: 'gemini-2.5-flash',
-        config: { systemInstruction },
-    });
-};
+// Fix: Per guidelines, initialize with apiKey from environment variable.
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 // Schemas for JSON response
 const nutritionSchema = {
@@ -214,20 +86,30 @@ const parseJsonResponse = <T,>(responseText: string): T => {
     // The response might have markdown ```json ... ``` wrapper
     const jsonString = responseText.replace(/^```json\s*|```\s*$/g, '').trim();
     return JSON.parse(jsonString);
-    } catch {
+  } catch (e) {
     console.error("Failed to parse JSON response:", responseText);
     throw new Error("Resposta da IA em formato inválido.");
   }
 };
 
+const goalTranslation = {
+    lose_weight: 'perder peso',
+    maintain_weight: 'manter o peso',
+    gain_muscle: 'ganhar massa muscular',
+};
+
 // Function to generate a meal plan
 export const generateMealPlan = async (profile: UserProfile, customRequest: string): Promise<Omit<MealPlan, 'id'>> => {
-    return runGeminiRequest(async () => {
-    const prompt = `
+  const prompt = `
     Crie um plano alimentar de um dia para um usuário com o seguinte perfil:
-${buildMealPlanProfileContext(profile)}
+    - Idade: ${profile.age}
+    - Peso: ${profile.weight} kg
+    - Altura: ${profile.height} cm
+    - Objetivo: ${goalTranslation[profile.goal]}
+    - Alergias: ${profile.allergies || 'Nenhuma'}
+    - Restrições alimentares: ${profile.restrictions || 'Nenhuma'}
 
-    O pedido específico do usuário é: "${customRequest.trim()}".
+    O pedido específico do usuário é: "${customRequest}".
 
     O plano deve incluir café da manhã, almoço e jantar. Se apropriado para o objetivo, inclua 1 ou 2 lanches.
     Para cada refeição, forneça o nome, uma breve descrição e a informação nutricional (calorias, proteínas, carboidratos, gorduras).
@@ -241,7 +123,7 @@ ${buildMealPlanProfileContext(profile)}
   // Using a more powerful model for complex JSON generation
   const model = 'gemini-2.5-pro';
 
-    const response = await getAiClient().models.generateContent({
+  const response = await ai.models.generateContent({
     model,
     contents: prompt,
     config: {
@@ -252,14 +134,12 @@ ${buildMealPlanProfileContext(profile)}
 
   const responseText = response.text;
   return parseJsonResponse<Omit<MealPlan, 'id'>>(responseText);
-    });
 };
 
 // Function to generate a single recipe
 export const generateRecipe = async (request: string): Promise<Omit<Recipe, 'id'>> => {
-    return runGeminiRequest(async () => {
     const prompt = `
-        Crie uma receita detalhada baseada no seguinte pedido: "${request.trim()}".
+        Crie uma receita detalhada baseada no seguinte pedido: "${request}".
         A receita deve incluir:
         - Nome da receita.
         - Descrição curta e apetitosa.
@@ -274,7 +154,7 @@ export const generateRecipe = async (request: string): Promise<Omit<Recipe, 'id'
     // Flash is fine for this task
     const model = 'gemini-2.5-flash';
 
-    const response = await getAiClient().models.generateContent({
+    const response = await ai.models.generateContent({
         model,
         contents: prompt,
         config: {
@@ -285,13 +165,11 @@ export const generateRecipe = async (request: string): Promise<Omit<Recipe, 'id'
     
     const responseText = response.text;
     return parseJsonResponse<Omit<Recipe, 'id'>>(responseText);
-    });
 };
 
 
 // Function to replace a single meal
 export const replaceMeal = async (profile: UserProfile, mealToReplace: string, currentPlan: Omit<MealPlan, 'id'>, customRequest?: string): Promise<Meal> => {
-    return runGeminiRequest(async () => {
     const prompt = `
       Preciso substituir uma refeição em um plano alimentar existente.
 
@@ -307,14 +185,14 @@ export const replaceMeal = async (profile: UserProfile, mealToReplace: string, c
 
       Refeição a ser substituída: ${mealToReplace}.
 
-    Pedido do usuário para a nova refeição: "${customRequest?.trim() || `Sugira uma alternativa para ${mealToReplace} que se alinhe com meu objetivo.`}"
+      Pedido do usuário para a nova refeição: "${customRequest || `Sugira uma alternativa para ${mealToReplace} que se alinhe com meu objetivo.`}"
 
       Gere uma nova refeição (nome, descrição e nutrição) que seja nutricionalmente semelhante à média para esse tipo de refeição, considerando o objetivo do usuário. A resposta DEVE ser um JSON válido que corresponda ao schema de uma única refeição.
     `;
 
     const model = 'gemini-2.5-flash';
 
-    const response = await getAiClient().models.generateContent({
+    const response = await ai.models.generateContent({
         model,
         contents: prompt,
         config: {
@@ -325,12 +203,10 @@ export const replaceMeal = async (profile: UserProfile, mealToReplace: string, c
     
     const responseText = response.text;
     return parseJsonResponse<Meal>(responseText);
-    });
 };
 
 // Function to generate a daily tip
 export const generateDailyTip = async (profile: UserProfile): Promise<string> => {
-    return runGeminiRequest(async () => {
     const prompt = `
         Gere uma dica de saúde curta, motivacional e acionável (no máximo 250 caracteres) para um usuário com o seguinte objetivo: '${goalTranslation[profile.goal]}'.
         A resposta deve ser apenas o texto da dica, sem qualquer formatação extra como "Dica do Dia:".
@@ -339,11 +215,10 @@ export const generateDailyTip = async (profile: UserProfile): Promise<string> =>
 
     const model = 'gemini-2.5-flash';
 
-    const response = await getAiClient().models.generateContent({
+    const response = await ai.models.generateContent({
         model,
         contents: prompt,
     });
 
     return response.text;
-    });
 }

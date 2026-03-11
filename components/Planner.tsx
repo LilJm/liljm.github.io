@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { UserProfile, MealPlan, Meal, NutritionInfo } from '../types';
-import { generateMealPlan, getGeminiErrorMessage, replaceMeal } from '../services/geminiService';
+import { generateMealPlan, replaceMeal } from '../services/geminiService';
 import Card from './ui/Card';
 import Spinner from './ui/Spinner';
 import { ClipboardListIcon } from './icons/ClipboardListIcon';
@@ -9,7 +9,7 @@ import { BrainIcon } from './icons/BrainIcon';
 
 interface PlannerProps {
   profile: UserProfile;
-  onSavePlan: (plan: MealPlan) => Promise<boolean>;
+  onSavePlan: (plan: MealPlan) => void;
 }
 
 const NutritionPill: React.FC<{ label: string; value: string | number }> = ({ label, value }) => (
@@ -23,14 +23,13 @@ const MealCard: React.FC<{
   meal: Meal;
   onReplace: () => void;
   isReplacing: boolean;
-  isDisabled: boolean;
-}> = ({ title, meal, onReplace, isReplacing, isDisabled }) => (
+}> = ({ title, meal, onReplace, isReplacing }) => (
   <Card>
     <div className="flex justify-between items-start">
       <h3 className="text-xl font-bold text-text dark:text-gray-50">{title}</h3>
       <button 
         onClick={onReplace} 
-        disabled={isDisabled}
+        disabled={isReplacing}
         className="flex items-center text-sm text-blue-500 hover:text-blue-700 font-semibold disabled:opacity-50 disabled:cursor-wait"
       >
         <ReplaceIcon className="w-4 h-4 mr-1" />
@@ -57,7 +56,6 @@ const Planner: React.FC<PlannerProps> = ({ profile, onSavePlan }) => {
   const [replacingMeal, setReplacingMeal] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSaved, setIsSaved] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
 
   const examplePrompts = [
     "Um dia com foco em proteínas para ganho de massa",
@@ -80,14 +78,14 @@ const Planner: React.FC<PlannerProps> = ({ profile, onSavePlan }) => {
       setMealPlan(plan);
     } catch (err) {
       console.error(err);
-      setError(getGeminiErrorMessage(err));
+      setError("Desculpe, não consegui gerar um plano com esse pedido. Tente ser mais específico ou diferente.");
     } finally {
       setLoading(false);
     }
   };
 
   const handleReplaceMeal = async (mealKey: 'breakfast' | 'lunch' | 'dinner' | `snacks.${number}`) => {
-    if (!mealPlan || replacingMeal) return;
+    if (!mealPlan) return;
     
     setReplacingMeal(mealKey);
     setError(null);
@@ -114,7 +112,7 @@ const Planner: React.FC<PlannerProps> = ({ profile, onSavePlan }) => {
             }
 
             // Recalculate total nutrition
-            const total: NutritionInfo = { calories: 0, protein: 0, carbs: 0, fat: 0 };
+            let total: NutritionInfo = { calories: 0, protein: 0, carbs: 0, fat: 0 };
             const meals = [updatedPlan.dailyPlan.breakfast, updatedPlan.dailyPlan.lunch, updatedPlan.dailyPlan.dinner, ...(updatedPlan.dailyPlan.snacks || [])];
             meals.forEach(m => {
                 if(m) {
@@ -131,25 +129,18 @@ const Planner: React.FC<PlannerProps> = ({ profile, onSavePlan }) => {
 
     } catch (err) {
         console.error(err);
-    setError(getGeminiErrorMessage(err));
+        setError(`Falha ao substituir ${mealName}. Tente novamente.`);
     } finally {
         setReplacingMeal(null);
     }
   };
 
-  const handleSavePlan = async () => {
+  const handleSavePlan = () => {
     if (mealPlan) {
-        setIsSaving(true);
-        const success = await onSavePlan({ ...mealPlan, id: crypto.randomUUID() });
-        setIsSaving(false);
-        setIsSaved(success);
-        if (!success) {
-          setError('Não foi possível salvar o plano agora. Tente novamente.');
-        }
+        onSavePlan({ ...mealPlan, id: new Date().toISOString() });
+        setIsSaved(true);
     }
   };
-
-  const isReplacingAnyMeal = replacingMeal !== null;
 
   return (
     <div className="p-4 md:p-8">
@@ -203,20 +194,20 @@ const Planner: React.FC<PlannerProps> = ({ profile, onSavePlan }) => {
                     </div>
                      <button 
                         onClick={handleSavePlan}
-                        disabled={isSaved || isSaving}
+                        disabled={isSaved}
                         className="px-6 py-2 bg-accent text-black font-semibold rounded-md shadow-sm hover:bg-green-600 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors whitespace-nowrap ml-4"
                     >
-                        {isSaved ? 'Plano Salvo!' : isSaving ? 'Salvando...' : 'Salvar Plano'}
+                        {isSaved ? 'Plano Salvo!' : 'Salvar Plano'}
                     </button>
                 </div>
             </Card>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <MealCard title="Café da Manhã" meal={mealPlan.dailyPlan.breakfast} onReplace={() => handleReplaceMeal('breakfast')} isReplacing={replacingMeal === 'breakfast'} isDisabled={isReplacingAnyMeal} />
-                    <MealCard title="Almoço" meal={mealPlan.dailyPlan.lunch} onReplace={() => handleReplaceMeal('lunch')} isReplacing={replacingMeal === 'lunch'} isDisabled={isReplacingAnyMeal} />
-                    <MealCard title="Jantar" meal={mealPlan.dailyPlan.dinner} onReplace={() => handleReplaceMeal('dinner')} isReplacing={replacingMeal === 'dinner'} isDisabled={isReplacingAnyMeal} />
+                <MealCard title="Café da Manhã" meal={mealPlan.dailyPlan.breakfast} onReplace={() => handleReplaceMeal('breakfast')} isReplacing={replacingMeal === 'breakfast'} />
+                <MealCard title="Almoço" meal={mealPlan.dailyPlan.lunch} onReplace={() => handleReplaceMeal('lunch')} isReplacing={replacingMeal === 'lunch'} />
+                <MealCard title="Jantar" meal={mealPlan.dailyPlan.dinner} onReplace={() => handleReplaceMeal('dinner')} isReplacing={replacingMeal === 'dinner'} />
                 {mealPlan.dailyPlan.snacks?.map((snack, index) => (
-                      <MealCard key={index} title={`Lanche ${index + 1}`} meal={snack} onReplace={() => handleReplaceMeal(`snacks.${index}`)} isReplacing={replacingMeal === `snacks.${index}`} isDisabled={isReplacingAnyMeal} />
+                    <MealCard key={index} title={`Lanche ${index + 1}`} meal={snack} onReplace={() => handleReplaceMeal(`snacks.${index}`)} isReplacing={replacingMeal === `snacks.${index}`} />
                 ))}
             </div>
 
