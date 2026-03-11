@@ -18,9 +18,10 @@
 ## Passo 3: Configurar Variáveis de Ambiente
 
 1. Abra o arquivo `.env` na raiz do projeto
-2. Substitua os valores `your_*_here` pelos valores reais do Firebase:
+2. Substitua os valores `your_*_here` pelos valores reais do Firebase e do Gemini:
 
 ```env
+VITE_GEMINI_API_KEY=your_new_gemini_key_here
 VITE_FIREBASE_API_KEY=AIzaSy...
 VITE_FIREBASE_AUTH_DOMAIN=nutriai-xxxxx.firebaseapp.com
 VITE_FIREBASE_PROJECT_ID=nutriai-xxxxx
@@ -44,9 +45,51 @@ No painel do Firestore, vá em "Regras" e utilize:
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Cada usuário só pode acessar seus próprios dados
-    match /users/{userId}/{document=**} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+
+    function isAllowedGoal(goal) {
+      return goal == 'lose_weight' || goal == 'maintain_weight' || goal == 'gain_muscle';
+    }
+
+    function isValidUserProfile(payload) {
+      return payload.keys().hasOnly(['value'])
+        && payload.value is map
+        && payload.value.keys().hasOnly(['name', 'age', 'weight', 'height', 'goal', 'allergies', 'restrictions'])
+        && payload.value.name is string
+        && payload.value.name.size() > 0
+        && payload.value.name.size() <= 80
+        && payload.value.age is number
+        && payload.value.age >= 0
+        && payload.value.age <= 120
+        && payload.value.weight is number
+        && payload.value.weight >= 0
+        && payload.value.weight <= 500
+        && payload.value.height is number
+        && payload.value.height >= 0
+        && payload.value.height <= 260
+        && isAllowedGoal(payload.value.goal)
+        && (!('allergies' in payload.value) || (payload.value.allergies is string && payload.value.allergies.size() <= 500))
+        && (!('restrictions' in payload.value) || (payload.value.restrictions is string && payload.value.restrictions.size() <= 500));
+    }
+
+    function isValidStoredList(payload, maxItems) {
+      return payload.keys().hasOnly(['value'])
+        && payload.value is list
+        && payload.value.size() <= maxItems;
+    }
+
+    function isValidUserDocument(documentId) {
+      return (documentId == 'userProfile' && isValidUserProfile(request.resource.data))
+        || (documentId == 'savedPlans' && isValidStoredList(request.resource.data, 50))
+        || (documentId == 'savedRecipes' && isValidStoredList(request.resource.data, 100));
+    }
+
+    match /users/{userId}/data/{documentId} {
+      allow read: if isOwner(userId);
+      allow create, update: if isOwner(userId) && isValidUserDocument(documentId);
+      allow delete: if isOwner(userId);
     }
   }
 }

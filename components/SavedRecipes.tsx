@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
-import { Recipe, NutritionInfo } from '../types';
+import { Recipe } from '../types';
 import Card from './ui/Card';
 import { DownloadIcon } from './icons/DownloadIcon';
 import jsPDF from 'jspdf';
 
 interface SavedRecipesProps {
   savedRecipes: Recipe[];
-  onDeleteRecipe: (recipeId: string) => void;
-  onUpdateRecipe: (recipeId: string, newName: string) => void;
+  onDeleteRecipe: (recipeId: string) => Promise<boolean>;
+  onUpdateRecipe: (recipeId: string, newName: string) => Promise<boolean>;
 }
 
 const NutritionPill: React.FC<{ label: string; value: string | number }> = ({ label, value }) => (
@@ -20,16 +20,22 @@ const SavedRecipes: React.FC<SavedRecipesProps> = ({ savedRecipes, onDeleteRecip
   const [expandedRecipeId, setExpandedRecipeId] = useState<string | null>(null);
   const [editingRecipeId, setEditingRecipeId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState<string>('');
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const toggleRecipe = (recipeId: string) => {
     if (editingRecipeId === recipeId) return;
     setExpandedRecipeId(expandedRecipeId === recipeId ? null : recipeId);
   };
   
-  const handleSaveName = (recipeId: string) => {
+  const handleSaveName = async (recipeId: string) => {
     if (editingName.trim()) {
-      onUpdateRecipe(recipeId, editingName.trim());
-      setEditingRecipeId(null);
+      const success = await onUpdateRecipe(recipeId, editingName.trim());
+      if (success) {
+        setActionError(null);
+        setEditingRecipeId(null);
+      } else {
+        setActionError('Não foi possível renomear a receita agora.');
+      }
     }
   };
 
@@ -131,6 +137,7 @@ const SavedRecipes: React.FC<SavedRecipesProps> = ({ savedRecipes, onDeleteRecip
   return (
     <div className="p-4 md:p-8">
       <h1 className="text-3xl font-bold text-text dark:text-gray-50 mb-8">Suas Receitas Salvas</h1>
+      {actionError && <p className="mb-4 text-red-500">{actionError}</p>}
       <div className="space-y-4">
         {savedRecipes.map((recipe) => (
           <Card key={recipe.id}>
@@ -151,7 +158,7 @@ const SavedRecipes: React.FC<SavedRecipesProps> = ({ savedRecipes, onDeleteRecip
                 <div className="flex items-center space-x-4 ml-4">
                   {editingRecipeId === recipe.id ? (
                     <>
-                      <button onClick={(e) => { e.stopPropagation(); handleSaveName(recipe.id); }} className="text-sm text-green-600 hover:text-green-800 font-semibold">Salvar</button>
+                      <button onClick={(e) => { e.stopPropagation(); void handleSaveName(recipe.id); }} className="text-sm text-green-600 hover:text-green-800 font-semibold">Salvar</button>
                       <button onClick={(e) => { e.stopPropagation(); setEditingRecipeId(null); }} className="text-sm text-gray-600 hover:text-gray-800 font-semibold">Cancelar</button>
                     </>
                   ) : (
@@ -159,10 +166,13 @@ const SavedRecipes: React.FC<SavedRecipesProps> = ({ savedRecipes, onDeleteRecip
                       <button title="Baixar PDF" onClick={(e) => { e.stopPropagation(); handleDownloadRecipePDF(recipe); }} className="text-gray-500 hover:text-primary"><DownloadIcon className="w-5 h-5" /></button>
                       <button onClick={(e) => { e.stopPropagation(); setEditingRecipeId(recipe.id); setEditingName(recipe.name); setExpandedRecipeId(recipe.id); }} className="text-blue-500 hover:text-blue-700 font-semibold text-sm">Renomear</button>
                       <button
-                            onClick={(e) => {
+                            onClick={async (e) => {
                                 e.stopPropagation();
                                 if (window.confirm(`Tem certeza que deseja excluir a receita "${recipe.name}"?`)) {
-                                    onDeleteRecipe(recipe.id);
+                                  const success = await onDeleteRecipe(recipe.id);
+                                  if (!success) {
+                                    setActionError('Não foi possível excluir a receita agora.');
+                                  }
                                 }
                             }}
                             className="text-red-500 hover:text-red-700 font-semibold text-sm"

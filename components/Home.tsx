@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import { UserProfile, MealPlan, Meal, NutritionInfo } from '../types';
 import { useDailyLocalStorage } from '../hooks/useDailyLocalStorage';
-import { generateDailyTip } from '../services/geminiService';
+import { generateDailyTip, getGeminiErrorMessage } from '../services/geminiService';
 import Card from './ui/Card';
 import { LightbulbIcon } from './icons/LightbulbIcon';
 import { DropletIcon } from './icons/DropletIcon';
@@ -37,24 +37,32 @@ const ProgressBar: React.FC<{ value: number; maxValue: number; colorClass: strin
     );
 };
 
-const TipOfTheDay: React.FC<{ profile: UserProfile }> = ({ profile }) => {
-    const [tip, setTip] = useState('');
+const TipOfTheDay: React.FC<{ profile: UserProfile; userId: string }> = ({ profile, userId }) => {
+    const [cachedTip, setCachedTip] = useDailyLocalStorage<string>(`dailyTip_${userId}`, '');
+    const [tip, setTip] = useState(cachedTip);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
-    const fetchTip = useCallback(async () => {
+    const fetchTip = useCallback(async (forceRefresh = false) => {
+        if (!forceRefresh && cachedTip) {
+            setTip(cachedTip);
+            setIsLoading(false);
+            return;
+        }
+
         setIsLoading(true);
         setError(null);
         try {
             const newTip = await generateDailyTip(profile);
             setTip(newTip);
+            setCachedTip(newTip);
         } catch (err) {
             console.error(err);
-            setError("Não foi possível carregar a dica. Tente novamente.");
+            setError(getGeminiErrorMessage(err));
         } finally {
             setIsLoading(false);
         }
-    }, [profile]);
+    }, [cachedTip, profile, setCachedTip]);
 
     useEffect(() => {
         fetchTip();
@@ -78,7 +86,7 @@ const TipOfTheDay: React.FC<{ profile: UserProfile }> = ({ profile }) => {
                     <LightbulbIcon className="w-6 h-6 mr-2 text-primary" /> Dica do Dia
                 </h2>
                 <button
-                    onClick={fetchTip}
+                    onClick={() => fetchTip(true)}
                     disabled={isLoading}
                     className="p-1.5 text-gray-500 hover:text-primary disabled:cursor-wait disabled:opacity-50"
                     aria-label="Gerar nova dica"
@@ -166,7 +174,7 @@ const Home: React.FC<HomeProps> = ({ profile, savedPlans, userId, onNavigate }) 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main Dashboard Column */}
         <div className="lg:col-span-2 space-y-6">
-            <TipOfTheDay profile={profile} />
+            <TipOfTheDay profile={profile} userId={userId} />
 
             <Card>
                 <div className="flex justify-between items-center mb-4">

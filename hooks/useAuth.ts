@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
+import { FirebaseError } from 'firebase/app';
 import { 
   createUserWithEmailAndPassword, 
   signInWithEmailAndPassword, 
   signOut, 
   onAuthStateChanged,
-  User as FirebaseUser,
   updateProfile
 } from 'firebase/auth';
 import { auth } from '../services/firebase';
@@ -14,6 +14,31 @@ interface AuthUser {
   email: string;
   name: string;
 }
+
+const getAuthErrorMessage = (error: unknown, fallbackMessage: string): string => {
+  if (!(error instanceof FirebaseError)) {
+    return fallbackMessage;
+  }
+
+  switch (error.code) {
+    case 'auth/email-already-in-use':
+      return 'Este e-mail já está em uso.';
+    case 'auth/weak-password':
+      return 'A senha deve ter pelo menos 6 caracteres.';
+    case 'auth/invalid-email':
+      return 'E-mail inválido.';
+    case 'auth/user-not-found':
+    case 'auth/invalid-credential':
+    case 'auth/wrong-password':
+      return 'E-mail ou senha inválidos.';
+    case 'auth/too-many-requests':
+      return 'Muitas tentativas seguidas. Aguarde alguns minutos e tente novamente.';
+    case 'auth/network-request-failed':
+      return 'Falha de rede. Verifique sua conexão e tente novamente.';
+    default:
+      return fallbackMessage;
+  }
+};
 
 export function useAuth() {
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
@@ -46,18 +71,8 @@ export function useAuth() {
       });
 
       return { success: true };
-    } catch (error: any) {
-      let message = 'Erro ao criar conta.';
-      
-      if (error.code === 'auth/email-already-in-use') {
-        message = 'Este e-mail já está em uso.';
-      } else if (error.code === 'auth/weak-password') {
-        message = 'A senha deve ter pelo menos 6 caracteres.';
-      } else if (error.code === 'auth/invalid-email') {
-        message = 'E-mail inválido.';
-      }
-      
-      return { success: false, message };
+    } catch (error) {
+      return { success: false, message: getAuthErrorMessage(error, 'Erro ao criar conta.') };
     }
   };
 
@@ -65,18 +80,8 @@ export function useAuth() {
     try {
       await signInWithEmailAndPassword(auth, email, password);
       return { success: true };
-    } catch (error: any) {
-      let message = 'E-mail ou senha inválidos.';
-      
-      if (error.code === 'auth/user-not-found') {
-        message = 'Usuário não encontrado.';
-      } else if (error.code === 'auth/wrong-password') {
-        message = 'Senha incorreta.';
-      } else if (error.code === 'auth/invalid-email') {
-        message = 'E-mail inválido.';
-      }
-      
-      return { success: false, message };
+    } catch (error) {
+      return { success: false, message: getAuthErrorMessage(error, 'E-mail ou senha inválidos.') };
     }
   };
 

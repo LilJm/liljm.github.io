@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { generateRecipe } from '../services/geminiService';
-import { Recipe, NutritionInfo } from '../types';
+import { generateRecipe, getGeminiErrorMessage } from '../services/geminiService';
+import { Recipe } from '../types';
 import Spinner from './ui/Spinner';
 import Card from './ui/Card';
 
@@ -11,7 +11,7 @@ const NutritionPill: React.FC<{ label: string; value: string | number }> = ({ la
 );
 
 interface RecipesProps {
-    onSaveRecipe: (recipe: Recipe) => void;
+    onSaveRecipe: (recipe: Recipe) => Promise<boolean>;
 }
 
 const Recipes: React.FC<RecipesProps> = ({ onSaveRecipe }) => {
@@ -20,6 +20,7 @@ const Recipes: React.FC<RecipesProps> = ({ onSaveRecipe }) => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [isSaved, setIsSaved] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
 
     const examplePrompts = [
         "Almoço vegetariano rico em proteínas",
@@ -39,10 +40,10 @@ const Recipes: React.FC<RecipesProps> = ({ onSaveRecipe }) => {
         setIsSaved(false);
         try {
             const result = await generateRecipe(request);
-            setRecipe({ ...result, id: new Date().toISOString() });
+            setRecipe({ ...result, id: crypto.randomUUID() });
         } catch (err) {
             console.error(err);
-            setError("Desculpe, não consegui gerar uma receita para isso. Por favor, tente um pedido diferente.");
+            setError(getGeminiErrorMessage(err));
         } finally {
             setLoading(false);
         }
@@ -52,10 +53,15 @@ const Recipes: React.FC<RecipesProps> = ({ onSaveRecipe }) => {
         setRequest(prompt);
     };
 
-    const handleSave = () => {
+    const handleSave = async () => {
         if (recipe) {
-            onSaveRecipe(recipe);
-            setIsSaved(true);
+            setIsSaving(true);
+            const success = await onSaveRecipe(recipe);
+            setIsSaving(false);
+            setIsSaved(success);
+            if (!success) {
+                setError('Não foi possível salvar a receita agora. Tente novamente.');
+            }
         }
     }
 
@@ -105,10 +111,10 @@ const Recipes: React.FC<RecipesProps> = ({ onSaveRecipe }) => {
                         </div>
                         <button 
                             onClick={handleSave} 
-                            disabled={isSaved}
+                            disabled={isSaved || isSaving}
                             className="px-4 py-2 bg-accent text-black font-semibold rounded-md shadow-sm hover:bg-green-600 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors whitespace-nowrap ml-4"
                         >
-                            {isSaved ? 'Salva!' : 'Salvar Receita'}
+                            {isSaved ? 'Salva!' : isSaving ? 'Salvando...' : 'Salvar Receita'}
                         </button>
                     </div>
                     
