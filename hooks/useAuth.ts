@@ -3,6 +3,8 @@ import { FirebaseError } from 'firebase/app';
 import { 
   createUserWithEmailAndPassword, 
   signInWithEmailAndPassword, 
+  sendEmailVerification,
+  sendPasswordResetEmail,
   signOut, 
   onAuthStateChanged,
   updateProfile
@@ -13,6 +15,11 @@ interface AuthUser {
   id: string;
   email: string;
   name: string;
+}
+
+interface AuthResult {
+  success: boolean;
+  message?: string;
 }
 
 const getAuthErrorMessage = (error: unknown, fallbackMessage: string): string => {
@@ -35,6 +42,8 @@ const getAuthErrorMessage = (error: unknown, fallbackMessage: string): string =>
       return 'Muitas tentativas seguidas. Aguarde alguns minutos e tente novamente.';
     case 'auth/network-request-failed':
       return 'Falha de rede. Verifique sua conexão e tente novamente.';
+    case 'auth/missing-email':
+      return 'Informe um e-mail para continuar.';
     default:
       return fallbackMessage;
   }
@@ -46,7 +55,7 @@ export function useAuth() {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-      if (firebaseUser) {
+      if (firebaseUser && firebaseUser.emailVerified) {
         setCurrentUser({
           id: firebaseUser.uid,
           email: firebaseUser.email || '',
@@ -61,7 +70,7 @@ export function useAuth() {
     return unsubscribe;
   }, []);
 
-  const register = async (name: string, email: string, password: string): Promise<{ success: boolean; message?: string }> => {
+  const register = async (name: string, email: string, password: string): Promise<AuthResult> => {
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       
@@ -70,18 +79,97 @@ export function useAuth() {
         displayName: name
       });
 
-      return { success: true };
+      await sendEmailVerification(userCredential.user);
+      await signOut(auth);
+
+      return {
+        success: true,
+        message: 'Conta criada com sucesso. Enviamos um e-mail de verificação. Confirme seu e-mail para acessar sua conta.',
+      };
     } catch (error) {
       return { success: false, message: getAuthErrorMessage(error, 'Erro ao criar conta.') };
     }
   };
 
-  const login = async (email: string, password: string): Promise<{ success: boolean; message?: string }> => {
+  const login = async (email: string, password: string): Promise<AuthResult> => {
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      await userCredential.user.reload();
+
+      if (!userCredential.user.emailVerified) {
+        try {
+          await sendEmailVerification(userCredential.user);
+        } catch {
+          // Ignore resend failures (e.g. throttle) and keep the verification requirement message.
+        }
+        await signOut(auth);
+
+        return {
+          success: false,
+          message: 'Seu e-mail ainda nao foi verificado. Reenviamos o link de confirmacao. Valide o e-mail para entrar.',
+        };
+      }
+
       return { success: true };
     } catch (error) {
       return { success: false, message: getAuthErrorMessage(error, 'E-mail ou senha inválidos.') };
+    }
+  };
+
+  const resendVerificationEmail = async (email: string, password: string): Promise<AuthResult> => {
+    if (!email || !password) {
+      return {
+        success: false,
+        message: 'Informe e-mail e senha para reenviar a verificacao.',
+      };
+    }
+
+    try {
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      await userCredential.user.reload();
+
+      if (userCredential.user.emailVerified) {
+        await signOut(auth);
+        return {
+          success: true,
+          message: 'Seu e-mail ja esta verificado. Agora voce pode entrar normalmente.',
+        };
+      }
+
+      await sendEmailVerification(userCredential.user);
+      await signOut(auth);
+
+      return {
+        success: true,
+        message: 'E-mail de verificacao reenviado com sucesso. Verifique sua caixa de entrada.',
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: getAuthErrorMessage(error, 'Nao foi possivel reenviar o e-mail de verificacao.'),
+      };
+    }
+  };
+
+  const sendPasswordReset = async (email: string): Promise<AuthResult> => {
+    if (!email) {
+      return {
+        success: false,
+        message: 'Informe seu e-mail para recuperar a senha.',
+      };
+    }
+
+    try {
+      await sendPasswordResetEmail(auth, email);
+      return {
+        success: true,
+        message: 'Enviamos o link para redefinir sua senha. Verifique seu e-mail.',
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: getAuthErrorMessage(error, 'Nao foi possivel enviar o e-mail de recuperacao de senha.'),
+      };
     }
   };
 
@@ -98,6 +186,8 @@ export function useAuth() {
     loading,
     register,
     login,
+    resendVerificationEmail,
+    sendPasswordReset,
     logout
   };
 }

@@ -1,7 +1,3 @@
-<<<<<<< HEAD
-
-1. Install dependencies:
-=======
 <div align="center">
 <img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
 </div>
@@ -19,7 +15,6 @@ Aplicação React + Vite para planejamento alimentar, receitas, hidratação e o
 ## Configuração local
 
 1. Instale as dependências:
->>>>>>> parent of a2c6cc4 (Revert "Refatoração e estruturação nova")
    `npm install`
 2. Crie seu arquivo `.env` a partir de `.env.example`.
 3. Preencha pelo menos `VITE_GEMINI_API_KEY` e as variáveis do Firebase.
