@@ -12,7 +12,7 @@ const Onboarding = lazy(() => import('./components/Onboarding'));
 
 const isProfileComplete = (profile: UserProfile | undefined): boolean => {
   if (!profile) return false;
-  return profile.age > 0 && profile.weight > 0 && profile.height > 0;
+  return profile.age > 0 && profile.weight > 0 && profile.height > 0 && profile.sex !== '';
 };
 
 const createDefaultProfile = (name: string): UserProfile => ({
@@ -20,6 +20,7 @@ const createDefaultProfile = (name: string): UserProfile => ({
   age: 0,
   weight: 0,
   height: 0,
+  sex: '',
   goal: 'maintain_weight',
   allergies: '',
   restrictions: '',

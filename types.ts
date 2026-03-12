@@ -1,10 +1,12 @@
 export type UserGoal = 'lose_weight' | 'maintain_weight' | 'gain_muscle';
+export type UserSex = 'female' | 'male' | 'other';
 
 export interface UserProfile {
   name: string;
   age: number;
   weight: number;
   height: number;
+  sex: UserSex | '';
   goal: UserGoal;
   allergies?: string;
   restrictions?: string;

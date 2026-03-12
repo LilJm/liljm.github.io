@@ -4,6 +4,8 @@ import { ChartIcon } from './icons/ChartIcon';
 import { useTheme } from '../hooks/useTheme';
 import { SunIcon } from './icons/SunIcon';
 import { MoonIcon } from './icons/MoonIcon';
+import { EyeIcon } from './icons/EyeIcon';
+import { EyeOffIcon } from './icons/EyeOffIcon';
 import { useAuth } from '../hooks/useAuth';
 
 const Auth: React.FC = () => {
@@ -16,34 +18,49 @@ const Auth: React.FC = () => {
   const [infoMessage, setInfoMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [passwordFocused, setPasswordFocused] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [theme, setTheme] = useTheme();
   const { register, login, sendPasswordReset } = useAuth();
 
   const passwordRules = [
-    { label: 'Mínimo de 8 caracteres', test: (p: string) => p.length >= 8 },
-    { label: 'Pelo menos uma letra maiúscula', test: (p: string) => /[A-Z]/.test(p) },
-    { label: 'Pelo menos uma letra minúscula', test: (p: string) => /[a-z]/.test(p) },
-    { label: 'Pelo menos um número', test: (p: string) => /[0-9]/.test(p) },
-    { label: 'Pelo menos um caractere especial (!@#$%...)', test: (p: string) => /[^A-Za-z0-9]/.test(p) },
+    { label: 'Mínimo de 8 caracteres', test: (p: string, _c: string) => p.length >= 8 },
+    { label: 'Pelo menos uma letra maiúscula', test: (p: string, _c: string) => /[A-Z]/.test(p) },
+    { label: 'Pelo menos uma letra minúscula', test: (p: string, _c: string) => /[a-z]/.test(p) },
+    { label: 'Pelo menos um número', test: (p: string, _c: string) => /[0-9]/.test(p) },
+    { label: 'Pelo menos um caractere especial (!@#$%...)', test: (p: string, _c: string) => /[^A-Za-z0-9]/.test(p) },
+    { label: 'As senhas devem coincidir', test: (p: string, c: string) => c.length > 0 && p === c },
   ];
 
   const toggleTheme = () => {
     setTheme(theme === 'light' ? 'dark' : 'light');
   };
 
+  const isRegisterFormValid =
+    name.trim().length > 0 &&
+    email.trim().length > 0 &&
+    password.length > 0 &&
+    confirmPassword.length > 0 &&
+    passwordRules.every((rule) => rule.test(password, confirmPassword));
+
+  const isSubmitDisabled = loading || (!isLoginMode && !isRegisterFormValid);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setInfoMessage('');
 
-    if (!email || !password || (!isLoginMode && !name)) {
+    if (!email || !password || (!isLoginMode && (!name || !confirmPassword))) {
       setError('Por favor, preencha todos os campos.');
       return;
     }
 
-    if (!isLoginMode && password !== confirmPassword) {
-      setError('As senhas não coincidem.');
-      return;
+    if (!isLoginMode) {
+      const failedRule = passwordRules.find((rule) => !rule.test(password, confirmPassword));
+      if (failedRule) {
+        setPasswordFocused(true);
+        return;
+      }
     }
 
     setLoading(true);
@@ -88,6 +105,8 @@ const Auth: React.FC = () => {
     setPassword('');
     setConfirmPassword('');
     setPasswordFocused(false);
+    setShowPassword(false);
+    setShowConfirmPassword(false);
   };
 
   const handleForgotPassword = async () => {
@@ -161,19 +180,29 @@ const Auth: React.FC = () => {
             </div>
             <div>
               <label htmlFor="password" className="block text-sm font-medium text-text-light dark:text-gray-400">Senha</label>
-              <input
-                type="password"
-                id="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                onFocus={() => setPasswordFocused(true)}
-                className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:border-gray-600 dark:text-gray-50 dark:placeholder-gray-400"
-                placeholder="Sua senha"
-              />
-              {!isLoginMode && passwordFocused && (
+              <div className="mt-1 relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  id="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  onFocus={() => setPasswordFocused(true)}
+                  className="block w-full p-2 pr-20 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:border-gray-600 dark:text-gray-50 dark:placeholder-gray-400"
+                  placeholder="Sua senha"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  className="absolute inset-y-0 right-2 my-auto h-fit p-1 text-text-light dark:text-gray-300 hover:text-primary"
+                  aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
+                >
+                  {showPassword ? <EyeOffIcon className="h-5 w-5" /> : <EyeIcon className="h-5 w-5" />}
+                </button>
+              </div>
+              {!isLoginMode && (passwordFocused || confirmPassword.length > 0) && (
                 <ul className="mt-2 space-y-1">
                   {passwordRules.map((rule) => {
-                    const passed = rule.test(password);
+                    const passed = rule.test(password, confirmPassword);
                     return (
                       <li key={rule.label} className={`flex items-center gap-1.5 text-xs ${passed ? 'text-green-500' : 'text-red-500'}`}>
                         <span>{passed ? '✓' : '✗'}</span>
@@ -199,14 +228,24 @@ const Auth: React.FC = () => {
             {!isLoginMode && (
               <div>
                 <label htmlFor="confirmPassword" className="block text-sm font-medium text-text-light dark:text-gray-400">Confirme sua senha</label>
-                <input
-                  type="password"
-                  id="confirmPassword"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:border-gray-600 dark:text-gray-50 dark:placeholder-gray-400"
-                  placeholder="Repita sua senha"
-                />
+                <div className="mt-1 relative">
+                  <input
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    id="confirmPassword"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className="block w-full p-2 pr-20 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:border-gray-600 dark:text-gray-50 dark:placeholder-gray-400"
+                    placeholder="Repita sua senha"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword((prev) => !prev)}
+                    className="absolute inset-y-0 right-2 my-auto h-fit p-1 text-text-light dark:text-gray-300 hover:text-primary"
+                    aria-label={showConfirmPassword ? 'Ocultar confirmacao de senha' : 'Mostrar confirmacao de senha'}
+                  >
+                    {showConfirmPassword ? <EyeOffIcon className="h-5 w-5" /> : <EyeIcon className="h-5 w-5" />}
+                  </button>
+                </div>
               </div>
             )}
             {error && <p className="text-red-500 text-sm text-center">{error}</p>}
@@ -214,8 +253,10 @@ const Auth: React.FC = () => {
             <div>
               <button 
                 type="submit" 
-                disabled={loading}
-                className="w-full px-6 py-3 bg-primary text-black font-bold rounded-lg shadow-md hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={isSubmitDisabled}
+                className={`w-full px-6 py-3 font-bold rounded-lg shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
+                  'bg-primary text-black hover:bg-primary-dark focus:ring-primary'
+                }`}
               >
                 {loading ? 'Processando...' : (isLoginMode ? 'Entrar' : 'Cadastrar')}
               </button>

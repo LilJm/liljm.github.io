@@ -24,8 +24,8 @@ const Onboarding: React.FC<OnboardingProps> = ({ profile, onSave, saveError }) =
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.age || formData.age <= 0 || !formData.weight || formData.weight <= 0 || !formData.height || formData.height <= 0) {
-      setError('Por favor, preencha sua idade, peso e altura com valores válidos para continuar.');
+    if (!formData.age || formData.age <= 0 || !formData.weight || formData.weight <= 0 || !formData.height || formData.height <= 0 || !formData.sex) {
+      setError('Por favor, preencha idade, peso, altura e sexo com valores válidos para continuar.');
       return;
     }
     setError('');
@@ -61,6 +61,16 @@ const Onboarding: React.FC<OnboardingProps> = ({ profile, onSave, saveError }) =
                     <input type="number" name="height" id="height" value={formData.height || ''} onChange={handleChange} className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:border-gray-600 dark:text-gray-50 dark:placeholder-gray-400" placeholder="Sua altura" required/>
                     </div>
                 </div>
+
+                  <div>
+                    <label htmlFor="sex" className="block text-sm font-medium text-text-light dark:text-gray-400">Sexo</label>
+                    <select name="sex" id="sex" value={formData.sex} onChange={handleChange} className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:border-gray-600 dark:text-gray-50" required>
+                    <option value="">Selecione</option>
+                    <option value="female">Feminino</option>
+                    <option value="male">Masculino</option>
+                    <option value="other">Outro</option>
+                    </select>
+                  </div>
                 
                 <div>
                     <label htmlFor="goal" className="block text-sm font-medium text-text-light dark:text-gray-400">Objetivo Principal</label>

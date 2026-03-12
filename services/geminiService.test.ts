@@ -8,6 +8,7 @@ describe('buildChatProfileContext', () => {
       age: 29,
       weight: 68,
       height: 170,
+      sex: 'female',
       goal: 'gain_muscle',
       allergies: 'amendoim',
       restrictions: 'sem lactose',

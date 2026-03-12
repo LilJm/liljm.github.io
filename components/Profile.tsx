@@ -28,6 +28,13 @@ const Profile: React.FC<ProfileProps> = ({ profile, onSave }) => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    if (!formData.age || formData.age <= 0 || !formData.weight || formData.weight <= 0 || !formData.height || formData.height <= 0 || !formData.sex) {
+      setSaved(false);
+      setError('Preencha idade, peso, altura e sexo com valores válidos para salvar.');
+      return;
+    }
+
     setIsSaving(true);
     const success = await onSave(formData);
     setIsSaving(false);
@@ -65,6 +72,16 @@ const Profile: React.FC<ProfileProps> = ({ profile, onSave }) => {
               <label htmlFor="height" className="block text-sm font-medium text-text-light dark:text-gray-400">Altura (cm)</label>
               <input type="number" name="height" id="height" value={formData.height || ''} onChange={handleChange} className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:border-gray-600 dark:text-gray-50 dark:placeholder-gray-400" placeholder="Sua altura" />
             </div>
+          </div>
+
+          <div>
+            <label htmlFor="sex" className="block text-sm font-medium text-text-light dark:text-gray-400">Sexo</label>
+            <select name="sex" id="sex" value={formData.sex} onChange={handleChange} className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:border-gray-600 dark:text-gray-50" required>
+              <option value="">Selecione</option>
+              <option value="female">Feminino</option>
+              <option value="male">Masculino</option>
+              <option value="other">Outro</option>
+            </select>
           </div>
           
           <div>

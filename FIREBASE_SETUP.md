@@ -53,10 +53,14 @@ service cloud.firestore {
       return goal == 'lose_weight' || goal == 'maintain_weight' || goal == 'gain_muscle';
     }
 
+    function isAllowedSex(sex) {
+      return sex == 'female' || sex == 'male' || sex == 'other';
+    }
+
     function isValidUserProfile(payload) {
       return payload.keys().hasOnly(['value'])
         && payload.value is map
-        && payload.value.keys().hasOnly(['name', 'age', 'weight', 'height', 'goal', 'allergies', 'restrictions'])
+        && payload.value.keys().hasOnly(['name', 'age', 'weight', 'height', 'sex', 'goal', 'allergies', 'restrictions'])
         && payload.value.name is string
         && payload.value.name.size() > 0
         && payload.value.name.size() <= 80
@@ -69,6 +73,8 @@ service cloud.firestore {
         && payload.value.height is number
         && payload.value.height >= 0
         && payload.value.height <= 260
+        && payload.value.sex is string
+        && isAllowedSex(payload.value.sex)
         && isAllowedGoal(payload.value.goal)
         && (!('allergies' in payload.value) || (payload.value.allergies is string && payload.value.allergies.size() <= 500))
         && (!('restrictions' in payload.value) || (payload.value.restrictions is string && payload.value.restrictions.size() <= 500));
