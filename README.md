@@ -5,7 +5,7 @@ Aplicação React + Vite para planejamento alimentar, receitas, hidratação e o
 ## Requisitos
 
 - Node.js 20+
-- 
+
 ## Configuração local
 
 1. Instale as dependências:
